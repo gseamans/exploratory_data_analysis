@@ -1,0 +1,505 @@
+---
+bibliography: ../zotero.bib
+csl: ../CSL/apa-single-spaced.csl
+output:
+  pdf_document:
+    fig_caption: yes
+    highlight: tango
+    includes:
+      in_header: header.tex
+    keep_tex: no
+  html_document: default
+---
+
+\begin{center}
+\includegraphics[width=0.5\textwidth]{../R_logo.png}\par\vspace{1cm}
+\vspace{1cm}
+	{\huge\bfseries RBrownBag Nr. 3 Exploratory Data Analysis\par}
+\vspace{1.5cm}
+	{\huge\bfseries Music\par}
+\vspace{2cm}
+	{\Large\itshape Gary R. Seamans\par}
+\vspace{2cm}
+  {\Large\itshape \today}
+\vfill
+\thispagestyle{empty}
+\newpage
+\pagenumbering{roman}
+\maketitle
+\tableofcontents
+\newpage
+\listoffigures
+\listoftables
+\newpage
+\end{center}
+\pagenumbering{arabic}
+\onehalfspace
+
+# Problem Description
+Online radio keeps track of everything you play. This information is used to make recommendations to you for additional music. This large dataset will be mined with arules in R to recommend new music to this community of radio listeners which has 300,000 records and 15,000 users. 
+
+# Data Preparation
+The first step is to read in the data. The original, very large, file presented some unique issues. I was able to work through them as described in the first part of the example. However, it would have taken more time than I had available to complete the processing on the 215Gb matrix that was created so I switched to a smaller dataset starting with the *Change of direction* section of the example. @hasherintroduction was an excellent guide to the *arules* package.
+
+## Loading and Cleaning the Data
+```{r, eval=FALSE}
+## Read in the data. The file is Tab delimited so I used read table. 
+## Some of the names use European characters
+## so I normalized them using check.names = TRUE
+fmData <- 
+  read.table(file = "lastfm-dataset-360K/usersha1-artmbid-artname-plays.tsv", 
+             check.names = TRUE, fill = TRUE, quote = "\t", sep = "\t", header = FALSE)
+
+## Name the columns
+colnames(fmData) <- c("User", "ArtistID", "ArtistName", "Plays")
+## Examine the data
+library(xtable)
+print(xtable(head(fmData),caption = "FM Play data"))
+```
+\begin{table}[htb]
+\centering
+\caption{FM Play data} 
+\vspace{0.2cm}
+\scalebox{0.8} {
+\begin{tabular}{rlllr}
+  \hline
+ & User & ArtistID & ArtistName & Plays \\ 
+  \hline
+1 & 00000c289a1829a808ac09c00daf10bc3c4e223b & 3bd73256-3905-4f3a-97e2-8b341527f805 & betty blowtorch & 2137 \\ 
+  2 & 00000c289a1829a808ac09c00daf10bc3c4e223b & f2fb0ff0-5679-42ec-a55c-15109ce6e320 & die Arzte & 1099 \\ 
+  3 & 00000c289a1829a808ac09c00daf10bc3c4e223b & b3ae82c2-e60b-4551-a76d-6620f1b456aa & melissa etheridge & 897 \\ 
+  4 & 00000c289a1829a808ac09c00daf10bc3c4e223b & 3d6bbeb7-f90e-4d10-b440-e153c0d10b53 & elvenking & 717 \\ 
+  5 & 00000c289a1829a808ac09c00daf10bc3c4e223b & bbd2ffd7-17f4-4506-8572-c1ea58c3f9a8 & juliette \& the licks & 706 \\ 
+  6 & 00000c289a1829a808ac09c00daf10bc3c4e223b & 8bfac288-ccc5-448d-9573-c33ea2aa5c30 & red hot chili peppers & 691 \\ 
+   \hline
+\end{tabular}}
+\end{table}
+
+We can see that the User and Artist IDs are hashes, so first I'll convert them to factors then convert the factors to numbers. I'll be using the ArtistID since there are Chinese and other characters that will be difficult with which to deal. There is also the issue that there are mangled, misspelled versions of artists names. This can be concluded by comparing the unique *ArtistIDs*, 160153, to the unique *ArtistNames*, 292500. We'll get a better result using the *ArtistID* and that can later be correlated to actual artist names.
+
+```{r, eval=FALSE}
+## Calculate unique artist ids
+ length(unique(fmData$ArtistID))
+[1] 160153
+
+## Calculate the number of unique artist namesunique(fmData2$ArtistID)
+length(unique(fmData$ArtistName))
+[1] 292500
+
+## Convert the user and artist to factors then integers then back to factors
+fmData$User <- as.factor(fmData$User)
+fmData$ArtistID <- as. factor(fmData$ArtistID)
+fmData$User <- as.integer(fmData$User)
+fmData$User <- as.factor(fmData$User)
+fmData$ArtistID <- as.integer(fmData$ArtistID)
+fmData$ArtistID <- as.factor(fmData$ArtistID)
+
+## Take a random sample to show the reformated dataset
+smpl <- sample(1:nrow(fmData),10)
+print(xtable(head(fmData[smpl,]),caption = "FM Play data sample"))
+
+## Find the number of unique users and total records
+length(unique(fmData$User))
+[1] 359349
+nrow(fmData)
+[1] 17559530
+```
+\begin{table}[htb]
+\centering
+\caption{FM Play data} 
+\vspace{0.2cm}
+\begin{tabular}{rrrlr}
+  \hline
+& User & ArtistID & ArtistName & Plays \\ 
+  \hline
+  4908302 & 100442 & 27048 & lisa miskovsky &   3 \\ 
+  7292843 & 149196 & 57138 & danny elfman & 234 \\ 
+  14632040 & 299405 & 23113 & paolo nutini & 167 \\ 
+  12022738 & 246025 & 15823 & frank sinatra & 167 \\ 
+  16609623 & 339882 & 14370 & lars winnerbäck &  68 \\ 
+  9194168 & 188080 & 151781 & michael jackson &  77 \\ 
+   \hline
+\end{tabular}
+\end{table}
+
+There are 359,349 unique users, with a total of 17,559,530 *listens* in this dataset. This looks much better. For the purposes of this exercise we are only looking at what the support for one artist means to another, so we only really need the *User* and *ArtistID* columns. First I'll check to make sure there are no NAs. First I'll check for *NAs*.
+
+```{r, eval=FALSE}
+print(xtable(data.frame(as.list(sapply(fmData, function(x) 
+  sum(is.na(x)))))), include.rownames = FALSE)
+```
+\begin{table}[htb]
+\centering
+\caption{Check for NAs}
+\vspace{0.2cm}
+\begin{tabular}{rrrr}
+  \hline
+User & ArtistID & ArtistName & Plays \\ 
+  \hline
+  User & ArtistID & ArtistName & Plays \\ 
+  \hline
+  0 &   0 &   0 & 1227 \\ 
+   \hline
+\end{tabular}
+\end{table}
+
+There are 1227 *NAs* for *Plays*. This may indicate corrupt records so to be safe I'll remove those records. I only really need the *User* and *ArtistName* columns since the number of plays is not relevant for the current assignment.
+
+```{r, eval=FALSE}
+## Remove rows containing NA
+fmData <- na.omit(fmData)
+nrow(fmData)
+[1] 17558303
+## Remove the uncessary columns
+fmData2 <- fmData[,c(1,2)]
+
+## Take a random sample to show the reformated dataset
+smpl <- sample(1:nrow(fmData2),10)
+print(xtable(head(fmData2[smpl,]),caption = "FM Play data sample"))
+```
+\begin{table}[htb]
+\centering
+\caption{fmData2 data sample}
+\vspace{0.2cm}
+\begin{tabular}{rrl}
+  \hline
+ & User & ArtistName \\ 
+  \hline
+ & User & ArtistName \\ 
+  \hline
+  1507403 & 30846 & 140320 \\ 
+  7600098 & 155481 & 1 \\ 
+  9116608 & 186508 & 59777 \\ 
+  5120833 & 104795 & 140320 \\ 
+  1196981 & 24503 & 53576 \\ 
+  5799961 & 118684 & 152180 \\
+   \hline
+\end{tabular}
+\end{table}
+
+
+\newpage
+Now the dataset is down to the two items of interest, the users and the artists whose music they played. 
+
+```{r, eval=FALSE}
+## Print the datatypes for fmData2
+print(xtable(strtable(fmData2), caption ="Data Types" ))
+
+fmMatrix <- as(fmData2, "transactions")
+library(arules)
+```
+\begin{table}[htb]
+\centering
+\caption{Data Types} 
+\vspace{0.2cm}
+\begin{tabular}{rllll}
+  \hline
+ & variable & class & levels & examples \\ 
+  \hline
+  1 & User & Factor w/ 359349 levels & "1", "2", "3", "4", ... & "1", "1", "1", "1", ... \\ 
+  2 & ArtistID & Factor w/ 160153 levels & "1", "2", "3", "4", ... & "37439", "152096", "112410", "38448", ... \\ 
+   \hline
+\end{tabular}
+\end{table}
+
+## Preparing the Matrix
+Now that we finally have our dataset in relatively good shape, it is time to convert it to a matrix with the *ArtistIDs* as the *list of items* and the *fans* as the transactions.
+
+```{r, eval=FALSE}
+library("arules")
+nrow(fmData2)
+[1] 17558303
+length(unique(fmData2$ArtistID))
+[1] 160153
+length(unique(fmData2$User))
+[1] 359349
+fmMatrix <- matrix(NA, nrow=length(unique(fmData2$User)), 
+                   ncol=length(unique(fmData2$ArtistID)))
+
+## First problem is that this dataset would require 214.4 Gb of RAM. 
+## Since I do have 256Gb I could probably shutdown almost everything, but
+## instead I'll load Rs bigmemory package
+Error: cannot allocate vector of size 214.4 Gb
+
+library(bigmatrix)
+
+fmMatrix <- big.matrix(nrow=length(unique(fmData2$User)), 
+                       ncol=length(unique(fmData2$ArtistID)),
+                       type = "integer", backingfile = "cs871u5IP",
+                       backingpath = "/opt/bigmatrix", init = 0)
+```
+
+# Change of direction
+
+The final BigMatrix file created using the above was 215Gb on disk. Since I was running short on time I loaded and used a smaller dataset.
+
+## Loading and prepping the data
+
+In this section I'll load and prep the smaller dataset.
+
+```{r, eval=FALSE}
+fmData <- read.csv(file = "lastfm.csv", sep = ",", header=TRUE)
+fmData <- na.omit(fmData)
+## Take a random sample to show the dataset
+smpl <- sample(1:nrow(fmData),10)
+print(xtable(head(fmData[smpl,]),caption = "FM Play data sample"))
+## Find the number of unique users and total records
+length(unique(fmData$user))
+[1] 15000
+length(unique(fmData$artist))
+[1] 1004
+nrow(fmData)
+[1] 289955
+```
+\begin{table}[htb]
+\centering
+\caption{fmData sample} 
+\vspace{0.2cm}
+\begin{tabular}{rrlll}
+  \hline
+ & user & artist & sex & country \\ 
+  \hline
+6746 & 459 & common & m & Netherlands \\ 
+  65678 & 4447 & counting crows & m & Brazil \\ 
+  49545 & 3365 & dj krush & f & Russian Federation \\ 
+  110471 & 7515 & iron maiden & m & Austria \\ 
+  249366 & 16942 & coldplay & m & Germany \\ 
+  289885 & 19714 & arch enemy & m & United Kingdom \\ 
+   \hline
+\end{tabular}
+\end{table}
+
+The sample above is pretty straight forward, so I'll move on with some further preparation. For this exercise only the *artist* and *user* will be used so I'll subset the dataset.
+
+
+
+```{r, eval=FALSE}
+## Subset the dataset
+fmData2 <- fmData[c(1,2)]
+## Lets convert the artist names so they will play nice as column names
+fmData2$artist <- stringi::stri_replace_all_regex(fmData2$artist, "[^a-z,A-Z,0-1]", "_")
+## Check for any NA values
+print(xtable(data.frame(as.list(sapply(fmData2, function(x)
+  sum(is.na(x)))))), include.rownames = FALSE)
+```
+\begin{table}[ht]
+\centering
+\caption{fmData2 Check for NAs}
+\vspace{0.2cm}
+\begin{tabular}{rrrr}
+  \hline
+user & artist \\ 
+  \hline
+  0 &   0 \\ 
+   \hline
+\end{tabular}
+\end{table}
+
+Since there were no *NAs* I'll move on to creating the matrix. 
+
+## Creating the Matrix
+This matrix will have the columns be the *artist* names and the rows the *fans*. Each cell will contain a *0*, artist not listened to by that *fan*, or a *1*, the artist was listened to by that *fan*.
+
+```{r, eval=FALSE}
+##The frist step is to create an empty matrix of the appropriate size
+fmMatrix <- matrix(0, nrow=length(unique(fmData2$user)), 
+                   ncol=length(unique(fmData2$artist)))
+## Above created a matrix with 15,075,000 cells, unique users * unique artists
+## all initialized to 0
+
+## Check the number of users
+nrow(fmMatrix)
+[1] 15000
+
+## Check the number of artists
+ncol(fmMatrix)
+[1] 1005
+
+## Set the column and row names
+colnames(fmMatrix) <- unique(fmData2$artist)
+rownames(fmMatrix) <-unique(fmData2$user)
+
+## Script to set the cell corresponding to [user,artist] to one if
+## it is in the play list for that fan, zero otherwise.
+i <- 0;
+for (i in 1:nrow(fmData2)){
+ artUser <- fmData2[i,]
+ row <- artUser$user
+ column <- artUser$"artist"
+ fmMatrix[as.character(row), column] <- 1
+}
+
+## Note: Matrix row names are always character so it is necessary,
+## in a script, to force the conversion. What is confusing is that
+## the cocercion is automatic from the R console, but not from a script.
+```
+Now the data is in a nicely formed matrix, 15000 by 1005, with the *artists* as the columns, the *fans* as the rows, and a zero or one in each cell indicating whether that user has played music by particular artists.
+
+## Creating an Item Matrix
+
+In the next step I transform the Matrix that was just created into an *item matrix* where the users are the transactions and the artists are the items in the basket. Once the transformation is complete a *summary()* will be taken.
+
+```{r, eval=FALSE}
+fmTransactions <- as(fmMatrix, "transactions")
+```
+
+## Analysis
+Now that we've created the transaction matrix we'll begin our analysis with an overview of the data and move on to additional analysis.
+
+### Data Summary
+The following command was used to produce a summary of the *fmTransactions* item matrix.
+\vspace{0.1cm}
+```{r, eval=FALSE}
+summary(fmTransactions)
+```
+\vspace{0.1cm}
+\begin{shaded}
+\begin{verbatim}
+transactions as itemMatrix in sparse format with
+ 15000 rows (elements/itemsets/transactions) and
+ 1005 columns (items) and a density of 0.01923403 
+
+most frequent items:
+            radiohead           the_beatles              coldplay red_hot_chili_peppers                  muse               (Other) 
+                 2704                  2668                  2378                  1786                  1711                278706 
+
+element (itemset/transaction) length distribution:
+sizes
+  1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  
+  23  24  25  26  27  28  29  30  31  32  33  34 
+185 222 280 302 359 385 472 461 491 501 504 482 472 471 479 477 456 455 444 455 436 478 
+426 438 408 446 417 375 348 340 316 293 274 286 
+ 35  36  37  38  39  40  41  42  43  44  45  46  47  48  49  50  51  52  54  55  63  76 
+238 208 193 181 128 102  93  61  55  36  23  15   6  11   2   1   5   3   1   2   1   1 
+
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+   1.00   11.00   19.00   19.33   27.00   76.00 
+
+includes extended item information - examples:
+                   labels
+1   red_hot_chili_peppers
+2 the_black_dahlia_murder
+3               goldfrapp
+
+includes extended transaction information - examples:
+  transactionID
+1             1
+2             3
+3             4
+\end{verbatim}
+\end{shaded}
+
+This summary provides a good overview of our data. Next I'll take a look at the frequency of items with at least 7.5% support.
+
+```{r, eval=FALSE}
+itemFrequencyPlot(fmTransactions, support = 0.075)
+```
+### Frequency Plot
+The frequency plot graphically displays some of the same data we saw in the *summary()* along with additional data on some of the less popular artists.
+
+\begin{figure}[htb]
+\begin{center}
+\caption{Frequency of Items with 7.5\% Support}
+\scalebox{0.8}{\includegraphics{freq_1.png}}
+\end{center}
+\end{figure}
+
+Just as in the summary we can see that *radiohead*, *the_beatles*, *coldplay*, and *red_hot_chilli_peppers* were the most frequently played artists. However, unlike in the summary, we can also tell that while the first three stand head and shoulders above the other artists, there are a number of artists that come close to the *red_hot_chilli_opeppers*.
+
+### Apriori
+In this section I'll mine for some association rules using *Apriori*.
+
+```{r, eval=FALSE}
+rules <- apriori(fmTransactions, parameter = list(support = 0.01, confidence = 0.6))
+```
+\vspace{0.2cm}
+\begin{shaded}
+\begin{verbatim}
+Apriori
+
+Parameter specification:
+ confidence minval smax arem  aval originalSupport support minlen maxlen target   ext
+        0.6    0.1    1 none FALSE            TRUE    0.01      1     10  rules FALSE
+
+Algorithmic control:
+ filter tree heap memopt load sort verbose
+    0.1 TRUE TRUE  FALSE TRUE    2    TRUE
+
+Absolute minimum support count: 150 
+
+set item appearances ...[0 item(s)] done [0.00s].
+set transactions ...[1005 item(s), 15000 transaction(s)] done [0.02s].
+sorting and recoding items ... [655 item(s)] done [0.01s].
+creating transaction tree ... done [0.01s].
+checking subsets of size 1 2 3 4 done [0.03s].
+writing ... [7 rule(s)] done [0.00s].
+creating S4 object  ... done [0.00s].
+\end{verbatim}
+\end{shaded}
+
+The *Apriori* run shows that there were 7 rules were discovered with the current settings. More, or fewer, rules can be discovered by changing the *support* setting. If the *support* setting is changed to *0.1*, no rules are discovered. If the *support* setting is changed to *0.001*, 89799 rules are discovered. Seven is a fair number so now I'll take a closer look at the seven rules that were discovered by the mining algorithm.
+
+First I'll begin by printing a summary of the discovered rules.
+ 
+```{r, eval=FALSE}
+summary(rules)
+```
+
+\begin{shaded}
+\begin{verbatim}
+set of 7 rules
+
+rule length distribution (lhs + rhs):sizes
+2 3 
+1 6 
+
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+  2.000   3.000   3.000   2.857   3.000   3.000 
+
+summary of quality measures:
+    support          confidence          lift      
+ Min.   :0.01007   Min.   :0.6151   Min.   :3.445  
+ 1st Qu.:0.01040   1st Qu.:0.6246   1st Qu.:3.472  
+ Median :0.01093   Median :0.6345   Median :3.569  
+ Mean   :0.01238   Mean   :0.6346   Mean   :3.737  
+ 3rd Qu.:0.01130   3rd Qu.:0.6404   3rd Qu.:4.011  
+ Max.   :0.02227   Max.   :0.6627   Max.   :4.180  
+
+mining info:
+           data ntransactions support confidence
+ fmTransactions         15000    0.01        0.6
+\end{verbatim}
+\end{shaded}
+
+We can see from the summary that the *lift* has a very nice median of 3.569 and the min/max values for *lift* are relatively close. Next I'll examine the rules in more detail.
+
+```{r, eval=FALSE}
+print(xtable(inspect(rules, n = 3, by = "confidence"), caption = "Mining Rules"))
+```
+\begin{table}[ht]
+\centering
+\caption{Mining Rules} 
+\vspace{0.1cm}
+\begin{tabular}{rlllrrr}
+  \hline
+ & lhs &  & rhs & support & confidence & lift \\ 
+  \hline
+1 & \{keane\} & =$>$ & \{coldplay\} & 0.02 & 0.64 & 4.02 \\ 
+  2 & \{radiohead,snow\_patrol\} & =$>$ & \{coldplay\} & 0.01 & 0.63 & 4.00 \\ 
+  3 & \{the\_killers,oasis\} & =$>$ & \{coldplay\} & 0.01 & 0.66 & 4.18 \\ 
+  4 & \{coldplay,the\_smashing\_pumpkins\} & =$>$ & \{radiohead\} & 0.01 & 0.63 & 3.49 \\ 
+  5 & \{the\_beatles,the\_smashing\_pumpkins\} & =$>$ & \{radiohead\} & 0.01 & 0.62 & 3.44 \\ 
+  6 & \{sigur\_r\_s,the\_beatles\} & =$>$ & \{radiohead\} & 0.01 & 0.64 & 3.57 \\ 
+  7 & \{pink\_floyd,bob\_dylan\} & =$>$ & \{the\_beatles\} & 0.01 & 0.62 & 3.46 \\ 
+   \hline
+\end{tabular}
+\end{table}
+
+From the table we can see, for example, that someone that listens to *pink_floyd* and *bob_dylan* is likely to also listen to *the_beatles*. It is easy to see how this information could be used to target ads for *the_beatles* to this group of users. These rules can be saved, passed around, and  used by other applications. 
+
+\newpage
+\clearpage
+\begin{center}
+References
+\end{center}
+\bibliographystyle{apalike2}

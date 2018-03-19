@@ -1,0 +1,97 @@
+% $ biblatex auxiliary file $
+% $ biblatex bbl format version 2.9 $
+% Do not modify the above lines!
+%
+% This is an auxiliary file used by the 'biblatex' package.
+% This file may safely be deleted. It will be recreated as
+% required.
+%
+\begingroup
+\makeatletter
+\@ifundefined{ver@biblatex.sty}
+  {\@latex@error
+     {Missing 'biblatex' package}
+     {The bibliography requires the 'biblatex' package.}
+      \aftergroup\endinput}
+  {}
+\endgroup
+
+\datalist[entry]{nyt/global//global/global}
+  \entry{HoaglinUnderstandingrobustexploratory1983}{book}{}
+    \name{author}{3}{}{%
+      {{hash=HDC}{%
+         family={Hoaglin},
+         familyi={H\bibinitperiod},
+         given={David\bibnamedelima C},
+         giveni={D\bibinitperiod\bibinitdelim C\bibinitperiod},
+      }}%
+      {{hash=MF}{%
+         family={Mosteller},
+         familyi={M\bibinitperiod},
+         given={Frederick},
+         giveni={F\bibinitperiod},
+      }}%
+      {{hash=TJW}{%
+         family={Tukey},
+         familyi={T\bibinitperiod},
+         given={John\bibnamedelima Wilder},
+         giveni={J\bibinitperiod\bibinitdelim W\bibinitperiod},
+      }}%
+    }
+    \list{publisher}{1}{%
+      {{Wiley New York}}%
+    }
+    \strng{namehash}{HDCMFTJW1}
+    \strng{fullhash}{HDCMFTJW1}
+    \field{labelnamesource}{author}
+    \field{labeltitlesource}{title}
+    \field{labelyear}{1983}
+    \field{labeldatesource}{year}
+    \field{sortinit}{H}
+    \field{sortinithash}{H}
+    \field{title}{Understanding Robust and Exploratory Data Analysis}
+    \field{volume}{3}
+    \field{year}{1983}
+  \endentry
+
+  \entry{tukey1977}{book}{}
+    \name{author}{1}{}{%
+      {{hash=TJW}{%
+         family={Tukey},
+         familyi={T\bibinitperiod},
+         given={John\bibnamedelima W},
+         giveni={J\bibinitperiod\bibinitdelim W\bibinitperiod},
+      }}%
+    }
+    \list{publisher}{1}{%
+      {{Reading, Mass.}}%
+    }
+    \strng{namehash}{TJW1}
+    \strng{fullhash}{TJW1}
+    \field{labelnamesource}{author}
+    \field{labeltitlesource}{title}
+    \field{labelyear}{1977}
+    \field{labeldatesource}{year}
+    \field{sortinit}{T}
+    \field{sortinithash}{T}
+    \field{title}{Exploratory Data Analysis}
+    \field{volume}{2}
+    \verb{file}
+    \verb G:\\Dropbox\\Dropbox\\CS_Doctoral\\Zotero\\storage\\US3TXHWW\\explora
+    \verb torydataanalysis.pdf
+    \endverb
+    \field{year}{1977}
+  \endentry
+
+  \entry{whatiseda}{misc}{}
+    \field{labeltitlesource}{title}
+    \field{sortinit}{W}
+    \field{sortinithash}{W}
+  \field{howpublished}{http://www.itl.nist.gov/div898/handbook/eda/section1/eda11.htm}
+    \field{title}{What Is {{EDA}}?}
+    \field{urlday}{14}
+    \field{urlmonth}{03}
+    \field{urlyear}{2018}
+  \endentry
+\enddatalist
+\endinput
